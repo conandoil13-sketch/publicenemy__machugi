@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PUBLIC ENEMY 맞추기</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Pretendard:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <p class="eyebrow">BLIND TEST</p>
+        <h1>PUBLIC ENEMY 맞추기</h1>
+        <p class="rule">듣고 고르기. 틀리면 10초 뒤 다시.</p>
+      </header>
+
+      <section class="scoreboard" aria-label="점수판">
+        <div class="score-card">
+          <span class="score-label">SCORE</span>
+          <strong id="score-value" class="score-value">0</strong>
+        </div>
+        <div class="score-card">
+          <span class="score-label">BEST</span>
+          <strong id="best-value" class="score-value">0</strong>
+        </div>
+      </section>
+
+      <section class="player-panel" aria-label="유튜브 플레이어">
+        <div class="player-frame">
+          <div id="player"></div>
+          <div id="player-cover" class="player-cover">
+            <span>?</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="controls" aria-label="퀴즈 조작">
+        <button id="listen-button" class="listen-button" type="button">듣기</button>
+        <p id="status" class="status" aria-live="polite">준비되면 눌러보세요.</p>
+      </section>
+
+      <section class="choices" aria-label="정답 선택">
+        <button class="choice-button" type="button" data-choice="PUBLIC ENEMY">
+          PUBLIC ENEMY
+        </button>
+        <button class="choice-button" type="button" data-choice="PUBLIC ENEMY remix">
+          PUBLIC ENEMY remix
+        </button>
+        <button class="choice-button" type="button" data-choice="PUBLIC ENEMIES">
+          PUBLIC ENEMIES
+        </button>
+      </section>
+    </main>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>
