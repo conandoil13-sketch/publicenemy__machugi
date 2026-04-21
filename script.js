@@ -26,13 +26,19 @@ const retryDelayMs = 10000;
 const bestScoreKey = "public-enemy-best-score";
 
 let player;
+let players = [];
 let currentRound = null;
 let currentListenStep = 0;
 let playbackTimer = null;
+let playbackMonitor = null;
 let retryTimer = null;
 let retryInterval = null;
 let pendingListenDuration = 0;
 let isWaitingForPlayback = false;
+let playbackRequestId = 0;
+let activePlaybackRequestId = 0;
+let activePlaybackTrackTitle = "";
+let activePlaybackStartTime = 0;
 let playerReady = false;
 let isLocked = false;
 let isAnswerRevealed = false;
@@ -40,6 +46,8 @@ let currentScore = 0;
 let bestScore = Number(window.localStorage.getItem(bestScoreKey) || 0);
 
 const coverEl = document.getElementById("player-cover");
+const playerStageEl = document.getElementById("player-stage");
+const answerThumbnailEl = document.getElementById("answer-thumbnail");
 const listenButton = document.getElementById("listen-button");
 const statusEl = document.getElementById("status");
 const scoreValueEl = document.getElementById("score-value");
@@ -57,18 +65,28 @@ function randomStart(track) {
 
 function clearTimers() {
   window.clearTimeout(playbackTimer);
+  window.clearInterval(playbackMonitor);
   window.clearTimeout(retryTimer);
   window.clearInterval(retryInterval);
   pendingListenDuration = 0;
   isWaitingForPlayback = false;
+  activePlaybackRequestId = 0;
+  activePlaybackTrackTitle = "";
+  activePlaybackStartTime = 0;
 }
 
 function stopPlayback() {
   window.clearTimeout(playbackTimer);
+  window.clearInterval(playbackMonitor);
   pendingListenDuration = 0;
   isWaitingForPlayback = false;
+  activePlaybackRequestId = 0;
+  activePlaybackTrackTitle = "";
+  activePlaybackStartTime = 0;
   if (playerReady) {
-    player.pauseVideo();
+    players.forEach((entry) => {
+      entry.player.pauseVideo();
+    });
   }
 }
 
@@ -104,6 +122,33 @@ function setCoverVisible(visible) {
   coverEl.classList.toggle("revealed", !visible);
 }
 
+function setAnswerThumbnail(track = null) {
+  if (!track) {
+    answerThumbnailEl.classList.remove("visible");
+    answerThumbnailEl.style.backgroundImage = "";
+    return;
+  }
+
+  answerThumbnailEl.style.backgroundImage =
+    `linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08)), url("https://i.ytimg.com/vi/${track.videoId}/hqdefault.jpg")`;
+  answerThumbnailEl.classList.add("visible");
+}
+
+function setActivePlayer(trackTitle) {
+  players.forEach((entry) => {
+    entry.slot.classList.toggle("active", entry.track.title === trackTitle);
+  });
+}
+
+function getPlayerEntry(trackTitle) {
+  return players.find((entry) => entry.track.title === trackTitle) || null;
+}
+
+function showAnswerThumbnail(track) {
+  setActivePlayer(track.title);
+  setAnswerThumbnail(track);
+}
+
 function nextRound() {
   clearTimers();
   currentRound = {
@@ -116,17 +161,15 @@ function nextRound() {
   isAnswerRevealed = false;
 
   resetChoiceStyles();
+  setAnswerThumbnail(null);
   setCoverVisible(true);
   setChoicesDisabled(false);
   listenButton.disabled = !playerReady;
   setStatus(playerReady ? "듣고 골라보세요." : "플레이어 준비 중...");
 
   if (playerReady) {
-    player.loadVideoById({
-      videoId: currentRound.track.videoId,
-      startSeconds: currentRound.startTime,
-    });
-    player.pauseVideo();
+    stopPlayback();
+    setActivePlayer(currentRound.track.title);
   }
 }
 
@@ -143,11 +186,26 @@ function playSnippet() {
     return;
   }
 
+  stopPlayback();
+
   const duration = getCurrentDuration();
   listenButton.disabled = true;
   pendingListenDuration = duration;
   isWaitingForPlayback = true;
+  playbackRequestId += 1;
+  activePlaybackRequestId = playbackRequestId;
+  activePlaybackTrackTitle = currentRound.track.title;
+  activePlaybackStartTime = currentRound.startTime;
   setStatus(`${duration}초 준비 중`);
+
+  player = getPlayerEntry(currentRound.track.title)?.player || null;
+  if (!player) {
+    isWaitingForPlayback = false;
+    pendingListenDuration = 0;
+    listenButton.disabled = false;
+    setStatus("플레이어 준비 중...");
+    return;
+  }
 
   player.seekTo(currentRound.startTime, true);
   player.playVideo();
@@ -186,6 +244,7 @@ function handleCorrect(choiceButton) {
   updateBestScore();
   renderScores();
   choiceButton.classList.add("correct");
+  showAnswerThumbnail(currentRound.track);
   setCoverVisible(false);
   setChoicesDisabled(true);
   listenButton.disabled = true;
@@ -227,46 +286,104 @@ choiceButtons.forEach((button) => {
 
 window.onYouTubeIframeAPIReady = function onYouTubeIframeAPIReady() {
   renderScores();
-  player = new YT.Player("player", {
-    videoId: tracks[0].videoId,
-    playerVars: {
-      autoplay: 0,
-      controls: 0,
-      disablekb: 1,
-      fs: 0,
-      modestbranding: 1,
-      rel: 0,
-      iv_load_policy: 3,
-      playsinline: 1,
-      origin: window.location.origin,
-    },
-    events: {
-      onReady: () => {
-        playerReady = true;
-        const iframe = player.getIframe();
-        iframe.setAttribute("allow", "autoplay; encrypted-media; fullscreen");
-        nextRound();
+  let readyCount = 0;
+
+  tracks.forEach((track, index) => {
+    const slot = document.createElement("div");
+    const slotId = `player-${index}`;
+    slot.className = "yt-player-slot";
+    slot.id = slotId;
+    playerStageEl.appendChild(slot);
+
+    const instance = new YT.Player(slotId, {
+      videoId: track.videoId,
+      playerVars: {
+        autoplay: 0,
+        controls: 0,
+        disablekb: 1,
+        fs: 0,
+        modestbranding: 1,
+        rel: 0,
+        iv_load_policy: 3,
+        playsinline: 1,
+        origin: window.location.origin,
       },
-      onStateChange: (event) => {
-        if (event.data !== YT.PlayerState.PLAYING || !isWaitingForPlayback) {
-          return;
-        }
+      events: {
+        onReady: (event) => {
+          const iframe = event.target.getIframe();
+          iframe.setAttribute("allow", "autoplay; encrypted-media; fullscreen");
+          iframe.setAttribute("loading", "eager");
+          readyCount += 1;
 
-        const duration = pendingListenDuration;
-        isWaitingForPlayback = false;
-        pendingListenDuration = 0;
-        setStatus(`${duration}초 재생`);
-
-        playbackTimer = window.setTimeout(() => {
-          player.pauseVideo();
-          currentListenStep += 1;
-          listenButton.disabled = false;
-
-          if (!isAnswerRevealed) {
-            setStatus("정답을 골라보세요.");
+          if (readyCount === tracks.length) {
+            playerReady = true;
+            nextRound();
           }
-        }, duration * 1000);
+        },
+        onStateChange: (event) => {
+          const activeEntry = getPlayerEntry(activePlaybackTrackTitle);
+          if (!activeEntry || event.target !== activeEntry.player) {
+            return;
+          }
+
+          if (event.data !== YT.PlayerState.PLAYING || !isWaitingForPlayback) {
+            return;
+          }
+
+          const requestIdAtStart = activePlaybackRequestId;
+          const duration = pendingListenDuration;
+          isWaitingForPlayback = false;
+          pendingListenDuration = 0;
+          setStatus(`${duration}초 재생`);
+
+          window.clearInterval(playbackMonitor);
+          playbackMonitor = window.setInterval(() => {
+            if (requestIdAtStart !== activePlaybackRequestId) {
+              window.clearInterval(playbackMonitor);
+              return;
+            }
+
+            const currentTime = activeEntry.player.getCurrentTime();
+            if (currentTime >= activePlaybackStartTime + duration - 0.05) {
+              window.clearInterval(playbackMonitor);
+              activeEntry.player.pauseVideo();
+              currentListenStep += 1;
+              listenButton.disabled = false;
+              activePlaybackRequestId = 0;
+              activePlaybackTrackTitle = "";
+              activePlaybackStartTime = 0;
+
+              if (!isAnswerRevealed) {
+                setStatus("정답을 골라보세요.");
+              }
+            }
+          }, 100);
+
+          playbackTimer = window.setTimeout(() => {
+            if (requestIdAtStart !== activePlaybackRequestId) {
+              return;
+            }
+
+            window.clearInterval(playbackMonitor);
+            activeEntry.player.pauseVideo();
+            currentListenStep += 1;
+            listenButton.disabled = false;
+            activePlaybackRequestId = 0;
+            activePlaybackTrackTitle = "";
+            activePlaybackStartTime = 0;
+
+            if (!isAnswerRevealed) {
+              setStatus("정답을 골라보세요.");
+            }
+          }, (duration + 1.5) * 1000);
+        },
       },
-    },
+    });
+
+    players.push({
+      track,
+      slot,
+      player: instance,
+    });
   });
 };
