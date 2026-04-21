@@ -55,7 +55,9 @@ const bestValueEl = document.getElementById("best-value");
 const choiceButtons = [...document.querySelectorAll(".choice-button")];
 
 function pickRandomTrack() {
-  return tracks[Math.floor(Math.random() * tracks.length)];
+  const readyEntries = players.filter((entry) => entry.isReady);
+  const pool = readyEntries.length > 0 ? readyEntries.map((entry) => entry.track) : tracks;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function randomStart(track) {
@@ -144,6 +146,10 @@ function getPlayerEntry(trackTitle) {
   return players.find((entry) => entry.track.title === trackTitle) || null;
 }
 
+function hasReadyPlayers() {
+  return players.some((entry) => entry.isReady);
+}
+
 function showAnswerThumbnail(track) {
   setActivePlayer(track.title);
   setAnswerThumbnail(track);
@@ -164,10 +170,10 @@ function nextRound() {
   setAnswerThumbnail(null);
   setCoverVisible(true);
   setChoicesDisabled(false);
-  listenButton.disabled = !playerReady;
-  setStatus(playerReady ? "듣고 골라보세요." : "플레이어 준비 중...");
+  listenButton.disabled = !hasReadyPlayers();
+  setStatus(hasReadyPlayers() ? "듣고 골라보세요." : "플레이어 준비 중...");
 
-  if (playerReady) {
+  if (hasReadyPlayers()) {
     stopPlayback();
     setActivePlayer(currentRound.track.title);
   }
@@ -182,7 +188,7 @@ function getRoundScore() {
 }
 
 function playSnippet() {
-  if (!playerReady || !currentRound || isLocked || isWaitingForPlayback) {
+  if (!hasReadyPlayers() || !currentRound || isLocked || isWaitingForPlayback) {
     return;
   }
 
@@ -286,7 +292,6 @@ choiceButtons.forEach((button) => {
 
 window.onYouTubeIframeAPIReady = function onYouTubeIframeAPIReady() {
   renderScores();
-  let readyCount = 0;
 
   tracks.forEach((track, index) => {
     const slot = document.createElement("div");
@@ -310,12 +315,16 @@ window.onYouTubeIframeAPIReady = function onYouTubeIframeAPIReady() {
       },
       events: {
         onReady: (event) => {
+          const entry = players.find((item) => item.player === event.target);
+          if (entry) {
+            entry.isReady = true;
+          }
+
           const iframe = event.target.getIframe();
           iframe.setAttribute("allow", "autoplay; encrypted-media; fullscreen");
           iframe.setAttribute("loading", "eager");
-          readyCount += 1;
 
-          if (readyCount === tracks.length) {
+          if (!playerReady && hasReadyPlayers()) {
             playerReady = true;
             nextRound();
           }
@@ -384,6 +393,18 @@ window.onYouTubeIframeAPIReady = function onYouTubeIframeAPIReady() {
       track,
       slot,
       player: instance,
+      isReady: false,
     });
   });
+
+  const bootFallbackTimer = window.setTimeout(() => {
+    if (!playerReady && hasReadyPlayers()) {
+      playerReady = true;
+      nextRound();
+    }
+  }, 2500);
+
+  if (tracks.length === 0) {
+    window.clearTimeout(bootFallbackTimer);
+  }
 };
