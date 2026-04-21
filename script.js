@@ -44,6 +44,7 @@ let isLocked = false;
 let isAnswerRevealed = false;
 let currentScore = 0;
 let bestScore = Number(window.localStorage.getItem(bestScoreKey) || 0);
+let previousRoundTrackTitle = "";
 
 const coverEl = document.getElementById("player-cover");
 const playerStageEl = document.getElementById("player-stage");
@@ -57,7 +58,14 @@ const choiceButtons = [...document.querySelectorAll(".choice-button")];
 function pickRandomTrack() {
   const readyEntries = players.filter((entry) => entry.isReady);
   const pool = readyEntries.length > 0 ? readyEntries.map((entry) => entry.track) : tracks;
-  return pool[Math.floor(Math.random() * pool.length)];
+
+  if (pool.length <= 1) {
+    return pool[0];
+  }
+
+  const filteredPool = pool.filter((track) => track.title !== previousRoundTrackTitle);
+  const nextPool = filteredPool.length > 0 ? filteredPool : pool;
+  return nextPool[Math.floor(Math.random() * nextPool.length)];
 }
 
 function randomStart(track) {
@@ -162,6 +170,7 @@ function nextRound() {
     startTime: 0,
   };
   currentRound.startTime = randomStart(currentRound.track);
+  previousRoundTrackTitle = currentRound.track.title;
   currentListenStep = 0;
   isLocked = false;
   isAnswerRevealed = false;
@@ -176,6 +185,12 @@ function nextRound() {
   if (hasReadyPlayers()) {
     stopPlayback();
     setActivePlayer(currentRound.track.title);
+
+    const entry = getPlayerEntry(currentRound.track.title);
+    if (entry?.isReady) {
+      entry.player.seekTo(currentRound.startTime, true);
+      entry.player.pauseVideo();
+    }
   }
 }
 
