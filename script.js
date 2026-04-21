@@ -1,19 +1,19 @@
 const tracks = [
   {
     title: "PUBLIC ENEMY",
-    videoId: "cDbyLWYMIVE",
+    videoId: "aF8OFSroHgg",
     safeStartMin: 18,
     safeStartMax: 108,
   },
   {
     title: "PUBLIC ENEMY remix",
-    videoId: "K5SiwHXZO-I",
+    videoId: "qTIwmMuezHs",
     safeStartMin: 18,
     safeStartMax: 138,
   },
   {
     title: "PUBLIC ENEMIES",
-    videoId: "jb-3JjruxAw",
+    videoId: "yHsJpkQtaus",
     safeStartMin: 18,
     safeStartMax: 116,
   },
