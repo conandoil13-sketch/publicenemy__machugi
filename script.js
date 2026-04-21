@@ -290,6 +290,24 @@ choiceButtons.forEach((button) => {
   button.addEventListener("click", handleChoiceClick);
 });
 
+function loadYouTubeIframeApi() {
+  if (window.YT?.Player) {
+    window.onYouTubeIframeAPIReady();
+    return;
+  }
+
+  const existingScript = document.querySelector('script[data-youtube-iframe-api="true"]');
+  if (existingScript) {
+    return;
+  }
+
+  const script = document.createElement("script");
+  script.src = "https://www.youtube.com/iframe_api";
+  script.async = true;
+  script.dataset.youtubeIframeApi = "true";
+  document.head.appendChild(script);
+}
+
 window.onYouTubeIframeAPIReady = function onYouTubeIframeAPIReady() {
   renderScores();
 
@@ -408,3 +426,5 @@ window.onYouTubeIframeAPIReady = function onYouTubeIframeAPIReady() {
     window.clearTimeout(bootFallbackTimer);
   }
 };
+
+loadYouTubeIframeApi();
